@@ -1,0 +1,66 @@
+# Workflow name displayed in GitHub Actions tab
+# For full pipeline cheat sheet and explanation, see: notes.md
+name: todo-app-ci-cd
+
+# Workflow triggers (events that start the pipeline)
+on: 
+  # Trigger manually from GitHub UI ('Run workflow' button)
+  workflow_dispatch:
+    
+  # Trigger automatically on git push to the main branch
+  push:
+    branches:
+      - main
+
+# Global environment variables accessible across all jobs/steps
+env:
+  # Tag Docker image with git commit SHA for unique versioning
+  IMAGE_TAG: ${{ github.sha }}
+
+# Group of jobs to execute
+jobs:
+  # Job identifier
+  build:
+    # Display name of the job in UI
+    name: Select the VM 
+    # Operating system runner VM to use
+    runs-on: ubuntu-latest
+
+    # Sequence of tasks executed inside the runner
+    steps:
+
+      # Step 1: Clone repository code into runner workspace
+      - name: checkout repository
+        uses: actions/checkout@v4
+      
+      # Step 2: Install JDK 21 (Temurin) and cache Maven dependencies
+      - name: Setting up java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      # Step 3: Grant execute permission and build Spring Boot JAR
+      - name: Build your app 
+        run: |
+          chmod +x ./mvnw
+          ./mvnw clean package
+      
+      # Step 4: Authenticate with Docker Hub using repo secrets & variables
+      - name: Login in to docker hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PAT }}
+
+      # Step 5: Build Docker container image tagged with commit SHA
+      - name: Build docker image
+        run: |
+          docker build -t ${{ vars.DOCKERHUB_USERNAME }}/todo-app:${{ env.IMAGE_TAG }} .
+      
+      # Step 6: Push Docker container image to Docker Hub repository
+      - name: Push docker image to dockerHub
+        run: |
+          docker push ${{ vars.DOCKERHUB_USERNAME }}/todo-app:${{ env.IMAGE_TAG }}
+          echo "Image pushed: ${{ vars.DOCKERHUB_USERNAME }}/todo-app:${{ env.IMAGE_TAG }}"
