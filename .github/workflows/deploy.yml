@@ -51,16 +51,16 @@ jobs:
       - name: Login in to docker hub
         uses: docker/login-action@v3
         with:
-          username: ${{ vars.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PAT }}
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PAT }}
 
       # Step 5: Build Docker container image tagged with commit SHA
       - name: Build docker image
         run: |
-          docker build -t ${{ vars.DOCKERHUB_USERNAME }}/todo-app:${{ env.IMAGE_TAG }} .
+          docker build -t ${{ vars.DOCKER_USERNAME }}/todo-app:${{ env.IMAGE_TAG }} .
       
       # Step 6: Push Docker container image to Docker Hub repository
       - name: Push docker image to dockerHub
         run: |
-          docker push ${{ vars.DOCKERHUB_USERNAME }}/todo-app:${{ env.IMAGE_TAG }}
-          echo "Image pushed: ${{ vars.DOCKERHUB_USERNAME }}/todo-app:${{ env.IMAGE_TAG }}"
+          docker push ${{ vars.DOCKER_USERNAME }}/todo-app:${{ env.IMAGE_TAG }}
+          echo "Image pushed: ${{ vars.DOCKER_USERNAME }}/todo-app:${{ env.IMAGE_TAG }}"
