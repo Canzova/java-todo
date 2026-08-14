@@ -1,6 +1,6 @@
 /**
  * TaskFlow - Modern Todo App Frontend Controller
- * Interacts with Spring Boot REST API (/api/todos)
+ * Full REST API integration + Dark Mode + Reactive State
  */
 
 // Application State
@@ -16,11 +16,14 @@ const state = {
   pendingAction: null, // Used for confirm modal callback
 };
 
-// API Base URL (Relative path to work locally and on any EC2 / custom domain)
+// API Base URL (Relative path works locally and on EC2)
 const API_BASE = '/api/todos';
 
 // DOM Elements
 const elements = {
+  // Theme Toggle
+  themeToggleBtn: document.getElementById('theme-toggle-btn'),
+
   // Stats
   statTotalCount: document.getElementById('stat-total-count'),
   statPendingCount: document.getElementById('stat-pending-count'),
@@ -79,9 +82,37 @@ const elements = {
 
 // Initialize Application
 document.addEventListener('DOMContentLoaded', () => {
+  setupTheme();
   setupEventListeners();
   fetchTodos();
 });
+
+// Setup Dark/Light Theme Switching
+function setupTheme() {
+  const currentTheme = localStorage.getItem('taskflow_theme') || 
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+  applyTheme(currentTheme);
+
+  if (elements.themeToggleBtn) {
+    elements.themeToggleBtn.addEventListener('click', () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      const nextTheme = isDark ? 'light' : 'dark';
+      applyTheme(nextTheme);
+      showToast(nextTheme === 'dark' ? 'Dark theme enabled 🌙' : 'Light theme enabled ☀️', 'info');
+    });
+  }
+}
+
+function applyTheme(theme) {
+  if (theme === 'dark') {
+    document.documentElement.classList.add('dark');
+    localStorage.setItem('taskflow_theme', 'dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+    localStorage.setItem('taskflow_theme', 'light');
+  }
+}
 
 // Setup Event Listeners
 function setupEventListeners() {
@@ -116,10 +147,10 @@ function setupEventListeners() {
     tab.addEventListener('click', () => {
       elements.filterTabs.forEach((t) => {
         t.classList.remove('active-tab');
-        t.classList.add('text-slate-600');
+        t.classList.add('text-slate-600', 'dark:text-slate-400');
       });
       tab.classList.add('active-tab');
-      tab.classList.remove('text-slate-600');
+      tab.classList.remove('text-slate-600', 'dark:text-slate-400');
 
       state.currentFilter = tab.dataset.filter;
       fetchTodos();
@@ -243,10 +274,10 @@ async function fetchTodos(showLoadingSpinner = true) {
     console.error('Error fetching todos:', error);
     showToast('Failed to load tasks. Please check your connection.', 'error');
     elements.itemsContainer.innerHTML = `
-      <div class="bg-rose-50 border border-rose-200 rounded-xl p-6 text-center text-rose-700">
+      <div class="bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 rounded-xl p-6 text-center text-rose-700 dark:text-rose-300">
         <i class="fa-solid fa-circle-exclamation text-2xl mb-2"></i>
         <h4 class="font-bold text-sm">Unable to connect to backend server</h4>
-        <p class="text-xs text-rose-600 mt-1">Make sure the Spring Boot service is running on port 8080.</p>
+        <p class="text-xs text-rose-600 dark:text-rose-400 mt-1">Make sure the Spring Boot service is running on port 8080.</p>
         <button onclick="fetchTodos()" class="mt-3 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold cursor-pointer">
           Retry
         </button>
@@ -304,7 +335,7 @@ function renderTodoList() {
 // Create Task Card Element
 function createTaskCardElement(todo) {
   const card = document.createElement('div');
-  card.className = `task-card bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+  card.className = `task-card bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all duration-200 ${
     todo.completed ? 'is-completed' : ''
   }`;
   card.dataset.id = todo.id;
@@ -319,30 +350,30 @@ function createTaskCardElement(todo) {
   card.innerHTML = `
     <!-- Left Section: Checkbox & Info -->
     <div class="flex items-start gap-3.5 flex-1 min-w-0">
-      <!-- Checkbox -->
-      <button 
-        type="button" 
-        class="custom-checkbox mt-0.5 shrink-0" 
-        data-action="toggle" 
-        data-id="${todo.id}" 
-        title="${todo.completed ? 'Mark as pending' : 'Mark as completed'}"
-      >
-        <input type="checkbox" ${todo.completed ? 'checked' : ''} class="sr-only">
-      </button>
+      
+      <!-- Interactive Native Checkbox with Custom Styling -->
+      <label class="relative flex items-center justify-center cursor-pointer shrink-0 mt-0.5" title="${todo.completed ? 'Mark as pending' : 'Mark as completed'}">
+        <input 
+          type="checkbox" 
+          ${todo.completed ? 'checked' : ''} 
+          class="task-toggle-checkbox w-5 h-5 rounded-md border-2 border-slate-300 dark:border-slate-600 text-brand-600 focus:ring-brand-500 focus:ring-offset-0 dark:focus:ring-offset-slate-900 dark:bg-slate-800 cursor-pointer transition-all"
+          data-id="${todo.id}"
+        >
+      </label>
 
       <!-- Task Title & Meta -->
       <div class="flex-1 min-w-0 space-y-1">
         <div class="flex flex-wrap items-center gap-2">
-          <h3 class="task-title text-sm font-semibold text-slate-800 break-words">${escapeHtml(todo.title)}</h3>
+          <h3 class="task-title text-sm font-semibold text-slate-800 dark:text-slate-100 break-words">${escapeHtml(todo.title)}</h3>
           <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${priorityClass}">
             ${priorityLabel}
           </span>
           ${dueDateInfo.html}
         </div>
         
-        ${todo.description ? `<p class="task-desc text-xs text-slate-500 line-clamp-2 leading-relaxed">${escapeHtml(todo.description)}</p>` : ''}
+        ${todo.description ? `<p class="task-desc text-xs text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">${escapeHtml(todo.description)}</p>` : ''}
         
-        <div class="flex items-center gap-3 text-[10px] text-slate-400 pt-0.5">
+        <div class="flex items-center gap-3 text-[10px] text-slate-400 dark:text-slate-500 pt-0.5">
           <span>Created: ${formatTimestamp(todo.createdAt)}</span>
           ${todo.updatedAt !== todo.createdAt ? `<span>&bull; Updated: ${formatTimestamp(todo.updatedAt)}</span>` : ''}
         </div>
@@ -350,10 +381,10 @@ function createTaskCardElement(todo) {
     </div>
 
     <!-- Right Section: Actions -->
-    <div class="flex items-center gap-1.5 self-end sm:self-center shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 w-full sm:w-auto justify-end">
+    <div class="flex items-center gap-1.5 self-end sm:self-center shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800 w-full sm:w-auto justify-end">
       <button 
         type="button" 
-        class="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors cursor-pointer text-xs flex items-center gap-1" 
+        class="p-2 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-950/60 rounded-lg transition-colors cursor-pointer text-xs flex items-center gap-1" 
         data-action="edit" 
         data-id="${todo.id}"
         title="Edit task"
@@ -364,7 +395,7 @@ function createTaskCardElement(todo) {
       
       <button 
         type="button" 
-        class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer text-xs flex items-center gap-1" 
+        class="p-2 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/60 rounded-lg transition-colors cursor-pointer text-xs flex items-center gap-1" 
         data-action="delete" 
         data-id="${todo.id}"
         title="Delete task"
@@ -375,10 +406,14 @@ function createTaskCardElement(todo) {
     </div>
   `;
 
-  // Attach card event listeners
-  const toggleBtn = card.querySelector('[data-action="toggle"]');
-  toggleBtn.addEventListener('click', () => toggleTodo(todo.id));
+  // Attach Checkbox Change Listener
+  const checkbox = card.querySelector('.task-toggle-checkbox');
+  checkbox.addEventListener('change', (e) => {
+    e.stopPropagation();
+    toggleTodo(todo.id);
+  });
 
+  // Attach Edit and Delete Listeners
   const editBtn = card.querySelector('[data-action="edit"]');
   editBtn.addEventListener('click', () => openEditModal(todo));
 
@@ -469,7 +504,7 @@ async function toggleTodo(id) {
 
 // Open Create Modal
 function openCreateModal() {
-  elements.modalTitle.innerHTML = '<i class="fa-solid fa-plus-circle text-brand-600"></i> Create New Task';
+  elements.modalTitle.innerHTML = '<i class="fa-solid fa-plus-circle text-brand-600 dark:text-brand-400"></i> Create New Task';
   elements.btnSubmitText.textContent = 'Create Task';
   elements.formTaskId.value = '';
   elements.formTitle.value = '';
@@ -484,7 +519,7 @@ function openCreateModal() {
 
 // Open Edit Modal (Prefill with task data)
 function openEditModal(todo) {
-  elements.modalTitle.innerHTML = '<i class="fa-solid fa-pen-to-square text-brand-600"></i> Edit Task';
+  elements.modalTitle.innerHTML = '<i class="fa-solid fa-pen-to-square text-brand-600 dark:text-brand-400"></i> Edit Task';
   elements.btnSubmitText.textContent = 'Save Changes';
   elements.formTaskId.value = todo.id;
   elements.formTitle.value = todo.title;
@@ -492,7 +527,6 @@ function openEditModal(todo) {
   elements.formPriority.value = todo.priority || 'MEDIUM';
   
   if (todo.dueDate) {
-    // Format LocalDateTime string to yyyy-MM-ddThh:mm for input[type="datetime-local"]
     const dateObj = new Date(todo.dueDate);
     const tzOffset = dateObj.getTimezoneOffset() * 60000;
     const localISOTime = (new Date(dateObj - tzOffset)).toISOString().slice(0, 16);
@@ -654,24 +688,24 @@ function closeConfirmModal() {
 // Toast Notification System
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
-  toast.className = 'toast-item px-4 py-3 rounded-xl shadow-lg border text-xs font-medium flex items-center gap-2.5 max-w-xs';
+  toast.className = 'toast-item px-4 py-3 rounded-xl shadow-lg border text-xs font-medium flex items-center gap-2.5 max-w-xs transition-colors';
 
   let icon = 'fa-solid fa-circle-info';
-  let colors = 'bg-white text-slate-800 border-slate-200';
+  let colors = 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border-slate-200 dark:border-slate-700';
 
   if (type === 'success') {
     icon = 'fa-solid fa-circle-check text-emerald-500';
-    colors = 'bg-white text-slate-800 border-emerald-200 shadow-emerald-500/5';
+    colors = 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border-emerald-200 dark:border-emerald-800/80 shadow-emerald-500/5';
   } else if (type === 'error') {
     icon = 'fa-solid fa-circle-xmark text-rose-500';
-    colors = 'bg-white text-slate-800 border-rose-200 shadow-rose-500/5';
+    colors = 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border-rose-200 dark:border-rose-800/80 shadow-rose-500/5';
   } else if (type === 'info') {
     icon = 'fa-solid fa-circle-info text-brand-500';
-    colors = 'bg-white text-slate-800 border-brand-200';
+    colors = 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border-brand-200 dark:border-brand-800/80';
   }
 
   toast.className += ` ${colors}`;
-  toast.innerHTML = `<i class="${icon} text-sm"></i> <span>${escapeHtml(message)}</span>`;
+  toast.innerHTML = `<i class="${icon} text-sm shrink-0"></i> <span>${escapeHtml(message)}</span>`;
 
   elements.toastContainer.appendChild(toast);
 
