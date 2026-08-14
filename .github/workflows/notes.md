@@ -131,4 +131,103 @@ Workflow File (.yml)
 | **3** | `Build your app` | `run: ./mvnw clean package` | Grants execute permissions to the wrapper and compiles/packages the Spring Boot JAR file. |
 | **4** | `Login in to docker hub` | `docker/login-action@v3` | Authenticates runner with Docker Hub registry using configured username and PAT. |
 | **5** | `Build docker image` | `run: docker build ...` | Builds the Docker image and tags it with the commit SHA for versioning. |
-| **6** | `Push docker image` | `run: docker push ...` | Uploads the Docker container image to Docker Hub repository. |
+| **6** | `Push docker image to dockerHub` | `run: docker push ...` | Uploads the Docker container image to Docker Hub repository. |
+| **7** | `Deploying code to EC2` | `appleboy/ssh-action@v1.2.2` | Connects via SSH to EC2, stops old container, pulls new image, and runs the updated container on port 8080. |
+
+---
+
+## 5. EC2 Setup Checklist
+
+To make this CI/CD deployment work smoothly on your AWS EC2 instance, complete the following setup steps:
+
+### Checklist Overview
+
+- [ ] **1. Launch EC2 Instance** (Ubuntu 22.04/24.04 LTS or Amazon Linux 2023).
+- [ ] **2. Configure AWS Security Group (Inbound Rules)**:
+  - **Port 22 (SSH)**: Source `0.0.0.0/0` (or GitHub runner IPs / your IP) to allow SSH connection from GitHub Actions.
+  - **Port 8080 (Custom TCP)**: Source `0.0.0.0/0` so users can access your Spring Boot Todo application in a browser.
+- [ ] **3. Install Docker on EC2**:
+  ```bash
+  # For Ubuntu:
+  sudo apt update
+  sudo apt install -y docker.io
+  sudo systemctl start docker
+  sudo systemctl enable docker
+
+  # For Amazon Linux:
+  # sudo dnf install -y docker
+  # sudo systemctl start docker
+  # sudo systemctl enable docker
+  ```
+- [ ] **4. Add EC2 User to Docker Group (Optional but recommended)**:
+  ```bash
+  sudo usermod -aG docker ubuntu   # Use 'ec2-user' if on Amazon Linux
+  # Log out and log back in for changes to take effect:
+  # exit
+  ```
+- [ ] **5. Test Docker on EC2**:
+  ```bash
+  docker --version
+  docker ps
+  ```
+
+---
+
+## 6. GitHub Repository Configuration (Secrets & Variables)
+
+Go to your GitHub Repository -> **Settings** -> **Secrets and variables** -> **Actions**:
+
+### A. Repository Variables (`Variables` tab)
+| Variable Name | Example Value | Purpose |
+| :--- | :--- | :--- |
+| `EC2_HOST` | `54.210.xx.xx` | Public IPv4 address or Public DNS of your EC2 instance. |
+| `EC2_USERNAME` | `ubuntu` (or `ec2-user`) | The SSH login user for your EC2 instance AMI. |
+| `DOCKER_USERNAME` | `yourdockerhubusername` | Your Docker Hub account username. |
+
+### B. Repository Secrets (`Secrets` tab -> `New repository secret`)
+| Secret Name | Content / Value | Purpose |
+| :--- | :--- | :--- |
+| `EC2_SSH_KEY` *(or `EC2_PASSWORD`)* | Raw content of your `.pem` private key file | Used by `appleboy/ssh-action` to authenticate SSH connection. Must include the header and footer (`-----BEGIN RSA PRIVATE KEY-----` ... `-----END RSA PRIVATE KEY-----`). |
+| `DOCKER_PAT` | Docker Hub Personal Access Token | Used by `docker/login-action` to push images. |
+
+---
+
+## 7. Deep Dive: `appleboy/ssh-action` Script Explained
+
+```bash
+# 1. Stop currently running container
+# '|| true' ensures that if the container doesn't exist yet (e.g. first run), the workflow continues instead of failing
+sudo docker stop todo-app || true
+
+# 2. Delete the old container to free up the container name ('todo-app') and port 8080
+sudo docker rm todo-app || true
+
+# 3. Download the newly built image tagged with the commit SHA from Docker Hub
+sudo docker pull yourusername/todo-app:commit-sha
+
+# 4. Run the container:
+#    -d: detached mode (runs in background)
+#    --name: assign friendly container name 'todo-app'
+#    --restart unless-stopped: container starts automatically if EC2 instance reboots
+#    -p 8080:8080: map EC2 port 8080 to container port 8080
+sudo docker run -d --name todo-app --restart unless-stopped -p 8080:8080 yourusername/todo-app:commit-sha
+
+# 5. Remove dangling/unused Docker images to prevent EC2 storage from filling up over time
+sudo docker image prune -f
+```
+
+---
+
+## 8. Common Troubleshooting & Gotchas
+
+1. **`ssh: handshake failed` or `connection timed out`**:
+   - Verify EC2 Security Group allows Inbound TCP traffic on **Port 22**.
+   - Check if `EC2_HOST` contains the **Public** IPv4 address (not the Private IP `172.x.x.x` or `10.x.x.x`).
+   - If using Elastic IP, ensure it hasn't changed.
+2. **`key is invalid` or SSH authentication failed**:
+   - Ensure you copied the **entire** private key file (`.pem`), including `-----BEGIN ...-----` and `-----END ...-----` with newlines.
+   - Do not wrap the secret in quotes when adding it to GitHub Secrets.
+3. **`pull access denied` on EC2**:
+   - If your Docker Hub repository is **private**, run `echo "${{ secrets.DOCKER_PAT }}" | sudo docker login -u "${{ vars.DOCKER_USERNAME }}" --password-stdin` before pulling on EC2, or make the repository **public** on Docker Hub.
+4. **App not accessible in browser (`http://<EC2_PUBLIC_IP>:8080`)**:
+   - Ensure Inbound Security Group rule on AWS allows port `8080` from `0.0.0.0/0`.

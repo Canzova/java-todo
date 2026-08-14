@@ -16,6 +16,7 @@ on:
 env:
   # Tag Docker image with git commit SHA for unique versioning
   IMAGE_TAG: ${{ github.sha }}
+  CONTAINER_NAME: todo-app
 
 # Group of jobs to execute
 jobs:
@@ -64,3 +65,31 @@ jobs:
         run: |
           docker push ${{ vars.DOCKER_USERNAME }}/todo-app:${{ env.IMAGE_TAG }}
           echo "Image pushed: ${{ vars.DOCKER_USERNAME }}/todo-app:${{ env.IMAGE_TAG }}"
+
+      # Step 7: SSH into AWS EC2 instance, pull new Docker image, and run container
+      - name: Deploying code to EC2
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          # Public IP or DNS of your EC2 instance (stored as a Repository Variable)
+          host: ${{ vars.EC2_HOST }}
+          # SSH username: 'ubuntu' for Ubuntu, 'ec2-user' for Amazon Linux (Repository Variable)
+          username: ${{ vars.EC2_USERNAME }}
+          # SSH Private Key (.pem file content stored in GitHub Secrets)
+          # Note: If your secret is named EC2_PASSWORD or EC2_SSH_KEY, this handles both
+          key: ${{ secrets.EC2_SSH_KEY || secrets.EC2_PASSWORD }}
+          script: |
+            # 1. Stop currently running container (|| true prevents failure if container does not exist yet)
+            sudo docker stop ${{ env.CONTAINER_NAME }} || true
+            
+            # 2. Remove stopped container so the name and ports can be reused
+            sudo docker rm ${{ env.CONTAINER_NAME }} || true
+            
+            # 3. Pull the latest built Docker image from Docker Hub using the commit SHA tag
+            sudo docker pull ${{ vars.DOCKER_USERNAME }}/todo-app:${{ env.IMAGE_TAG }}
+            
+            # 4. Start new container in detached mode (-d), forward port 8080, and auto-restart on system reboot
+            sudo docker run -d --name ${{ env.CONTAINER_NAME }} --restart unless-stopped -p 8080:8080 ${{ vars.DOCKER_USERNAME }}/todo-app:${{ env.IMAGE_TAG }}
+            
+            # 5. Remove unused/dangling Docker images to prevent EC2 disk space exhaustion
+            sudo docker image prune -f
+
