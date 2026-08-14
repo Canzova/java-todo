@@ -1,6 +1,6 @@
 # GitHub Actions CI/CD Pipeline Notes & Revision Guide
 
-This guide provides a reference for building, understanding, and revising GitHub Actions workflows.
+This guide provides a reference for building, understanding, configuring, and revising GitHub Actions workflows and the AWS EC2 deployment.
 
 ---
 
@@ -9,12 +9,12 @@ This guide provides a reference for building, understanding, and revising GitHub
 A workflow is an automated process defined by a YAML file in `.github/workflows/`. Below is the fundamental hierarchy:
 
 ```
-Workflow File (.yml)
+Workflow File (.github/workflows/deploy.yml)
 ├── name: (Workflow Display Name)
-├── on: (Triggers / Events)
+├── on: (Triggers / Events: push, workflow_dispatch)
 ├── env: (Global Environment Variables)
 └── jobs: (Group of 1 or more jobs)
-    └── <job_id>: (Unique Job Identifier, e.g. 'build')
+    └── build: (Job Identifier)
         ├── name: (Job Display Name)
         ├── runs-on: (Runner VM OS, e.g. ubuntu-latest)
         ├── env: (Job-level Environment Variables)
@@ -98,17 +98,6 @@ Workflow File (.yml)
   - `uses`: Invokes an existing, reusable action from GitHub Marketplace (e.g., `actions/checkout@v4`).
   - `with`: Passes input parameters/options required by the action specified in `uses`.
   - `run`: Runs custom shell command(s) in the runner terminal.
-- **Example**:
-  ```yaml
-  steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
-
-    - name: Run Maven Build
-      run: |
-        chmod +x ./mvnw
-        ./mvnw clean package
-  ```
 
 ---
 
@@ -168,7 +157,7 @@ To make this CI/CD deployment work smoothly on your AWS EC2 instance, complete t
 - [ ] **5. Test Docker on EC2**:
   ```bash
   docker --version
-  docker ps
+  sudo docker ps
   ```
 
 ---
